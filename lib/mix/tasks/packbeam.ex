@@ -11,10 +11,12 @@ defmodule Mix.Tasks.Atomvm.Packbeam do
          {:atomvm, {:ok, avm_config}} <- {:atomvm, Keyword.fetch(config, :atomvm)},
          {:start, {:ok, start_module}} <-
            {:start, Map.get(options, :start, Keyword.fetch(avm_config, :start))},
+         {:prune, {:ok, prune}} <-
+           {:prune, Map.get(options, :prune, Keyword.fetch(avm_config, :prune, true))},
          :ok <- pack_avm_deps(),
          :ok <- pack_priv(),
          start_beam_file = "#{Atom.to_string(start_module)}.beam",
-         :ok <- pack_beams(Project.compile_path(), start_beam_file, "#{config[:app]}.avm") do
+         :ok <- pack_beams(Project.compile_path(), start_beam_file, "#{config[:app]}.avm", prune) do
       {:ok, []}
     else
       {:check, _} ->
@@ -119,16 +121,8 @@ defmodule Mix.Tasks.Atomvm.Packbeam do
     regular_files ++ sub_files
   end
 
-  defp pack_beams(beams_path, start_beam_file, out) do
-    beams_path
-    |> File.ls!()
-    |> Enum.filter(fn file -> String.ends_with?(file, ".beam") end)
-    |> List.delete(start_beam_file)
-    |> Enum.map(fn file -> {file, :beam} end)
-    |> List.insert_at(0, {start_beam_file, :beam_start})
-    |> Enum.map(fn {file, opts} -> {Path.join(Project.compile_path(), file), opts} end)
-    |> Enum.concat([{"deps.avm", :avm}, {"priv.avm", :avm}])
-    |> PackBEAM.make_avm(out)
+  defp pack_beams(beams_path, start_beam_file, out, prune) do
+    :packbeam_api.create(out, beams_path, :undefined, prune, start_beam_file)
   end
 
   defp avm_deps_path() do
