@@ -6,33 +6,34 @@ defmodule ExAtomVM.PackBEAM do
                     ~c"LocT",
                     ~c"ImpT",
                     ~c"LitU",
+                    ~c"LitT",
                     ~c"FunT",
-                    ~c"StrT",
-                    ~c"LitT"
+                    ~c"StrT"
                   ])
 
   @avm_header <<0x23, 0x21, 0x2F, 0x75, 0x73, 0x72, 0x2F, 0x62, 0x69, 0x6E, 0x2F, 0x65, 0x6E,
                 0x76, 0x20, 0x41, 0x74, 0x6F, 0x6D, 0x56, 0x4D, 0x0A, 0x00, 0x00>>
 
   defp uncompress_literals(chunks) do
-    with {~c"LitT", litt} <- List.keyfind(chunks, ~c"LitT", 0),
-         litu <- maybe_uncompress_literals(litt) do
-      chunks
-      |> List.keyreplace(~c"LitT", 0, {~c"LitU", litu})
-    else
-      nil -> chunks
-      _ -> :error
+    with {~c"LitT", litt} <- List.keyfind(chunks, ~c"LitT", 0) do
+      case maybe_uncompress_literals(litt) do
+        {:litu, udata} ->
+          List.keyreplace(chunks, ~c"LitT", 0, {~c"LitU", udata})
+        {:litt, data} ->
+          chunks
+          # List.keyreplace(chunks, ~c"LitT", 0, {~c"LitT", data})
+        nil ->
+          chunks
+      end
     end
   end
 
   defp maybe_uncompress_literals(chunk) do
     case chunk do
-      <<0::32, data::binary>> ->
-        data
-
-      <<_size::4-binary, data::binary>> ->
-        :zlib.uncompress(data)
-
+      <<0::32, data::binary>> = litt ->
+        {:litt, litt}
+      <<_size::4-binary, data0::binary>> = data->
+        {:litu, :zlib.uncompress(data)}
       _ ->
         nil
     end
